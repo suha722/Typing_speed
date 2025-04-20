@@ -1,0 +1,235 @@
+import random
+import time
+import string
+import tkinter as tk
+from tkinter import messagebox
+
+class TypingSpeedTest:
+    """
+    لعبة لاختبار سرعة الطباعة. تعرض جُمَل عشوائية، وتقيس:
+    - الكلمات في الدقيقة (WPM).
+    - دقة الكتابة (%).
+    - عدد الكلمات الصحيحة جزئيًا (جزء من الجملة) بدلًا من المطابقة الكاملة.
+    """
+
+    def __init__(self, root):
+        """
+        تهيئة واجهة المستخدم والمتغيرات اللازمة للتطبيق.
+        """
+        self.root = root
+        self.root.title("Typing Speed Test (Improved)")
+
+        # جمل عشوائية للاختبار
+        self.sentences = [
+            "The quick brown fox jumps over the lazy dog.",
+            "Python is a great programming language!",
+            "Typing tests can help improve your speed and accuracy.",
+            "The sun sets in the west and rises in the east.",
+            "Practice makes perfect when it comes to typing.",
+            "Keyboard shortcuts can greatly enhance productivity.",
+            "Stay consistent and track your progress daily."
+        ]
+
+        # مدة الاختبار بالثواني
+        self.timer_duration = 60
+        self.timer = self.timer_duration
+
+        # متغيرات تتبع
+        self.start_time = None
+        self.current_sentence = ""
+        self.typed_text = ""
+        self.words_typed = 0
+        self.correct_words = 0
+
+        # واجهة المستخدم
+        self.create_ui()
+
+    def create_ui(self):
+        """
+        إنشاء مكوّنات الواجهة الرسومية (Labels, Entry, Buttons).
+        """
+        # تسمية تعرض الجملة الحالية
+        self.sentence_label = tk.Label(
+            self.root,
+            text="",
+            font=("Arial", 14),
+            wraplength=500,
+            justify="center"
+        )
+        self.sentence_label.pack(pady=20)
+
+        # حقل الإدخال لكتابة الجملة
+        self.entry = tk.Entry(self.root, font=("Arial", 14), width=50)
+        self.entry.pack(pady=10)
+        # عند الضغط على زر Enter يتم التحقق من الإدخال
+        self.entry.bind("<Return>", self.check_input)
+
+        # تسمية تعرض الوقت المتبقي
+        self.timer_label = tk.Label(self.root, text=f"Time Left: {self.timer}s", font=("Arial", 12))
+        self.timer_label.pack(pady=10)
+
+        # زر بدء الاختبار
+        self.start_button = tk.Button(
+            self.root,
+            text="Start Test",
+            font=("Arial", 12),
+            command=self.start_test
+        )
+        self.start_button.pack(pady=5)
+
+        # زر إيقاف مبكر للاختبار (اختياري)
+        self.stop_button = tk.Button(
+            self.root,
+            text="Stop Test",
+            font=("Arial", 12),
+            command=self.stop_test
+        )
+        self.stop_button.pack(pady=5)
+
+        # تسمية لعرض الإحصائيات أثناء الكتابة
+        self.stats_label = tk.Label(
+            self.root,
+            text="Words Typed: 0 | Correct Words: 0",
+            font=("Arial", 12)
+        )
+        self.stats_label.pack(pady=10)
+
+        # تسمية لعرض النتيجة النهائية (WPM & Accuracy)
+        self.result_label = tk.Label(self.root, text="", font=("Arial", 14))
+        self.result_label.pack(pady=20)
+
+    def start_test(self):
+        """
+        بدء الاختبار:
+        - اختيار جملة عشوائية.
+        - إعادة ضبط المؤقت والمتغيرات.
+        - بدء تحديث المؤقت.
+        """
+        self.reset_stats()
+        self.select_random_sentence()
+        self.entry.delete(0, tk.END)
+        self.entry.focus()
+        self.start_time = time.time()
+        self.timer = self.timer_duration
+        self.update_timer()
+
+    def stop_test(self):
+        """
+        إيقاف الاختبار قبل انتهاء الوقت وحساب النتائج فورًا.
+        """
+        self.timer = 0  # لتخطي العد التنازلي والانتقال لحساب النتائج
+
+    def check_input(self, event):
+        """
+        التحقق من النص المدخل عند الضغط على Enter:
+        - حساب الكلمات المكتوبة والصحيحة جزئيًا.
+        - اختيار جملة جديدة للكتابة.
+        - تحديث واجهة الإحصائيات الحية.
+        """
+        self.typed_text = self.entry.get().strip()
+        self.entry.delete(0, tk.END)
+
+        # حساب عدد الكلمات المكتوبة والكلمات الصحيحة جزئيًا
+        typed_words, correct_count = self.score_input(self.typed_text, self.current_sentence)
+        self.words_typed += typed_words
+        self.correct_words += correct_count
+
+        # جملة جديدة
+        self.select_random_sentence()
+        self.update_live_stats()
+
+    def update_timer(self):
+        """
+        تحديث المؤقت كل ثانية وعرضه في الواجهة.
+        عند انتهاء الوقت أو الوصول إلى صفر يتم حساب النتائج النهائية.
+        """
+        if self.timer > 0:
+            self.timer -= 1
+            self.timer_label.config(text=f"Time Left: {self.timer}s")
+            self.root.after(1000, self.update_timer)
+        else:
+            self.calculate_results()
+
+    def calculate_results(self):
+        """
+        حساب الكلمات في الدقيقة (WPM) والدقة (Accuracy) وعرضهما.
+        وإظهار نافذة إعادة التشغيل أو الإنهاء.
+        """
+        elapsed = self.timer_duration - self.timer  # الوقت المستغرق فعليًا
+        if elapsed == 0:
+            elapsed = 1  # لمنع القسمة على صفر إذا لم يمر أي وقت
+
+        # الكلمات في الدقيقة: (مجموع الكلمات المكتوبة / عدد الثواني) * 60
+        wpm = (self.words_typed / elapsed) * 60
+
+        # الدقة (Accuracy) كنسبة مئوية
+        accuracy = 0
+        if self.words_typed > 0:
+            accuracy = (self.correct_words / self.words_typed) * 100
+
+        self.result_label.config(text=f"WPM: {wpm:.2f}, Accuracy: {accuracy:.2f}%")
+        self.show_restart_popup()
+
+    def show_restart_popup(self):
+        """
+        نافذة منبثقة تقدم خيار إعادة الاختبار أو الخروج.
+        """
+        result = messagebox.askyesno("Test Complete", "Do you want to restart the test?")
+        if result:
+            self.start_test()
+        else:
+            self.root.destroy()
+
+    def select_random_sentence(self):
+        """
+        اختيار جملة عشوائية من القائمة وتعيينها في التسمية (Label).
+        """
+        self.current_sentence = random.choice(self.sentences)
+        self.sentence_label.config(text=self.current_sentence)
+
+    def score_input(self, typed_text, actual_sentence):
+        """
+        مقارنة النص المدخل بالجملة الفعلية بشكل جزئي:
+        - تجاهل علامات الترقيم وحالة الأحرف.
+        - حساب عدد الكلمات المكتوبة والصحيحة.
+        يعيد (عدد الكلمات المكتوبة, عدد الكلمات الصحيحة).
+        """
+        # إزالة علامات الترقيم وتحوّيل الحروف إلى صغيرة
+        translator = str.maketrans('', '', string.punctuation)
+
+        typed_text_clean = typed_text.translate(translator).lower().split()
+        actual_sentence_clean = actual_sentence.translate(translator).lower().split()
+
+        words_typed = len(typed_text_clean)
+
+        # حساب الكلمات الصحيحة جزئيًا (فقط عند تطابق الكلمة تمامًا)
+        correct_count = 0
+        for typed_word, actual_word in zip(typed_text_clean, actual_sentence_clean):
+            if typed_word == actual_word:
+                correct_count += 1
+
+        return words_typed, correct_count
+
+    def update_live_stats(self):
+        """
+        تحديث تسمية الإحصائيات الحيّة (عدد الكلمات المكتوبة والصحيحة).
+        """
+        self.stats_label.config(
+            text=f"Words Typed: {self.words_typed} | Correct Words: {self.correct_words}"
+        )
+
+    def reset_stats(self):
+        """
+        إعادة ضبط جميع المتغيرات لتبدأ الجولة من الصفر.
+        """
+        self.words_typed = 0
+        self.correct_words = 0
+        self.result_label.config(text="")
+        self.update_live_stats()
+        self.timer_label.config(text=f"Time Left: {self.timer_duration}s")
+
+# نقطة الدخول لتشغيل اللعبة
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = TypingSpeedTest(root)
+    root.mainloop()
